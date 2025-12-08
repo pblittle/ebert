@@ -3,11 +3,13 @@
 import os
 import traceback
 from pathlib import Path
+from typing import Optional
 
 import typer
 from rich.console import Console
 
 from ebert import __version__
+from ebert.diff import FileError
 from ebert.models import FocusArea, ReviewMode
 from ebert.output import get_formatter
 from ebert.providers.registry import ProviderNotFoundError, ProviderUnavailableError
@@ -34,6 +36,10 @@ def version_callback(value: bool) -> None:
 
 @app.command()
 def main(
+  files: Optional[list[str]] = typer.Argument(
+    None,
+    help="Files or glob patterns to review (e.g., src/*.py)",
+  ),
   branch: str = typer.Option(None, "--branch", "-b", help="Branch to review against base"),
   base: str = typer.Option("main", "--base", help="Base branch for comparison"),
   provider: str = typer.Option(None, "--provider", "-p", help="LLM provider (gemini, openai, anthropic, ollama)"),
@@ -45,7 +51,11 @@ def main(
   debug: bool = typer.Option(False, "--debug", "-d", help="Show full traceback on errors"),
   version: bool = typer.Option(None, "--version", "-v", callback=version_callback, is_eager=True),
 ) -> None:
-  """Review code changes using AI."""
+  """Review code changes using AI.
+
+  With no arguments, reviews staged git changes.
+  With file arguments, reviews the specified files directly.
+  """
   mode = ReviewMode.FULL if full else ReviewMode.QUICK
   focus_areas = _parse_focus(focus) if focus else None
   show_traceback = debug or _is_debug()
@@ -59,6 +69,7 @@ def main(
       mode=mode,
       focus=focus_areas,
       config_path=config,
+      files=files,
     )
 
     formatter = get_formatter(format_type)
@@ -72,6 +83,9 @@ def main(
   except ProviderUnavailableError as e:
     console.print(f"[red]Error:[/red] {e}")
     console.print("[dim]Set the appropriate API key environment variable.[/dim]")
+    raise typer.Exit(1)
+  except FileError as e:
+    console.print(f"[red]Error:[/red] {e}")
     raise typer.Exit(1)
   except Exception as e:
     console.print(f"[red]Error:[/red] {e}")
