@@ -36,6 +36,9 @@ make review
 
 ```bash
 ebert                        # Review staged changes
+ebert src/auth.py            # Review specific file
+ebert src/*.py               # Review files matching glob
+ebert src/ lib/              # Review multiple paths
 ebert --full                 # Comprehensive review (not just critical issues)
 ebert --branch feature/foo   # Review branch against main
 ebert --focus security,bugs  # Focus on specific areas
