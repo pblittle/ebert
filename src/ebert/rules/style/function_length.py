@@ -1,5 +1,6 @@
 """STY002: Detection of overly long functions."""
 
+import os
 import re
 from typing import Sequence
 
@@ -96,23 +97,23 @@ class FunctionLengthRule:
 
   def _get_function_pattern(self, file_path: str) -> re.Pattern[str] | None:
     """Get function pattern for file extension."""
-    for ext, pattern in self.FUNCTION_PATTERNS.items():
-      if file_path.endswith(ext):
-        return pattern
-    return None
+    _, ext = os.path.splitext(file_path)
+    return self.FUNCTION_PATTERNS.get(ext)
 
   def _measure_function(self, lines: list[str], start: int, file_path: str) -> int:
     """Measure the length of a function starting at the given line."""
+    _, ext = os.path.splitext(file_path)
+
     # Special handling for Python (indentation-based)
-    if file_path.endswith(".py"):
+    if ext == ".py":
       return self._measure_python_function(lines, start)
 
     # Special handling for Ruby (def/end blocks)
-    if file_path.endswith(".rb"):
+    if ext == ".rb":
       return self._measure_ruby_function(lines, start)
 
     # Check if this is a brace-based language
-    if not any(file_path.endswith(ext) for ext in self._BRACE_LANGUAGES):
+    if ext not in self._BRACE_LANGUAGES:
       return 1  # Can't measure, assume single line
 
     # Count braces for proper nesting
@@ -131,6 +132,10 @@ class FunctionLengthRule:
         # Function ends when brace count returns to 0 or less
         if brace_count <= 0:
           return i - start + 1
+
+    # No brace found (e.g., single-line arrow function: const fn = () => 1;)
+    if not started:
+      return 1
 
     return len(lines) - start
 
