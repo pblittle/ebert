@@ -36,7 +36,7 @@ class FunctionLengthRule:
   )
 
   FUNCTION_PATTERNS: dict[str, re.Pattern[str]] = {
-    ".py": re.compile(r"^\s*(async\s+)?def\s+(\w+)\s*\("),
+    ".py": re.compile(r"^\s*(?:async\s+)?def\s+(\w+)\s*\("),
     ".js": re.compile(_JS_FUNC_PATTERN),
     ".ts": re.compile(_JS_FUNC_PATTERN),
     ".go": re.compile(r"^\s*func\s+(?:\([^)]+\)\s+)?(\w+)\s*\("),
@@ -158,19 +158,24 @@ class FunctionLengthRule:
 
     return len(lines) - start
 
+  # Ruby block keywords that pair with 'end'
+  _RUBY_BLOCK_KEYWORDS = re.compile(
+    r"^(?:def|class|module|if|unless|case|while|until|for|begin|do)\b"
+  )
+
   def _measure_ruby_function(self, lines: list[str], start: int) -> int:
     """Measure Ruby function length using def/end blocks."""
     if start >= len(lines):
       return 1
 
-    # Count nested def/end blocks
+    # Count all block keywords that pair with 'end'
     depth = 1  # Start at 1 for the opening def
 
     for i in range(start + 1, len(lines)):
       line = lines[i].strip()
 
-      # Check for nested def (increases depth)
-      if re.match(r"^def\s+\w+", line):
+      # Check for block-starting keywords (increases depth)
+      if self._RUBY_BLOCK_KEYWORDS.match(line):
         depth += 1
 
       # Check for end keyword (decreases depth)

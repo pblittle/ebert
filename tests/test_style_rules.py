@@ -218,6 +218,23 @@ end"""
     assert len(matches) == 1
     assert "outer" in matches[0].message
 
+  def test_ruby_with_nested_if_blocks(self, rule: FunctionLengthRule) -> None:
+    """Test that Ruby if/end blocks are counted correctly."""
+    content = """def short_func
+  if x
+    1
+  end
+end
+
+def another_short
+  1
+end"""
+    matches = rule.check("test.rb", content)
+
+    # short_func is 5 lines, another_short is 3 lines
+    # Both under threshold, so no matches
+    assert len(matches) == 0
+
   def test_detects_long_class_method(self, rule: FunctionLengthRule) -> None:
     """Test that class methods are detected."""
     content = """class MyClass {
