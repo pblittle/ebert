@@ -23,7 +23,7 @@ class FunctionLengthRule:
   # JS/TS pattern: function name() or const/let/var name = () =>
   _JS_FUNC_PATTERN = (
     r"^\s*(?:async\s+)?(?:function\s+(\w+)|"
-    r"(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)\s*=>|\(\)))"
+    r"(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\([^)]*\)\s*=>)"
   )
   # Java pattern: modifiers + return type + name()
   # Return type can include generics (List<String>) or arrays (int[])
@@ -111,6 +111,10 @@ class FunctionLengthRule:
     if file_path.endswith(".py"):
       return self._measure_python_function(lines, start)
 
+    # Special handling for Ruby (def/end blocks)
+    if file_path.endswith(".rb"):
+      return self._measure_ruby_function(lines, start)
+
     # Brace-based languages
     end_pattern = None
     for ext, pattern in self.END_PATTERNS.items():
@@ -161,6 +165,29 @@ class FunctionLengthRule:
       current_indent = len(line) - len(line.lstrip())
       if current_indent <= base_indent:
         return i - start
+
+    return len(lines) - start
+
+  def _measure_ruby_function(self, lines: list[str], start: int) -> int:
+    """Measure Ruby function length using def/end blocks."""
+    if start >= len(lines):
+      return 1
+
+    # Count nested def/end blocks
+    depth = 1  # Start at 1 for the opening def
+
+    for i in range(start + 1, len(lines)):
+      line = lines[i].strip()
+
+      # Check for nested def (increases depth)
+      if re.match(r"^def\s+\w+", line):
+        depth += 1
+
+      # Check for end keyword (decreases depth)
+      if line == "end" or line.startswith("end "):
+        depth -= 1
+        if depth == 0:
+          return i - start + 1
 
     return len(lines) - start
 

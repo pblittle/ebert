@@ -185,3 +185,35 @@ function three() { return 3; }"""
     # Only 'two' should be detected as long (7 lines > 5 threshold)
     assert len(matches) == 1
     assert "two" in matches[0].message
+
+  def test_detects_long_ruby_function(self, rule: FunctionLengthRule) -> None:
+    content = """def long_function
+  a = 1
+  b = 2
+  c = 3
+  d = 4
+  e = 5
+  e
+end
+
+def short_function
+  1
+end"""
+    matches = rule.check("test.rb", content)
+
+    assert len(matches) == 1
+    assert "long_function" in matches[0].message
+
+  def test_handles_nested_ruby_blocks(self, rule: FunctionLengthRule) -> None:
+    """Test that nested def/end blocks are handled correctly."""
+    content = """def outer
+  def inner
+    1
+  end
+  inner
+end"""
+    matches = rule.check("test.rb", content)
+
+    # outer is 6 lines, inner is 3 lines
+    assert len(matches) == 1
+    assert "outer" in matches[0].message
