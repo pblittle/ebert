@@ -4,8 +4,16 @@ from pathlib import Path
 
 from ebert.config import Settings, load_config
 from ebert.diff import extract_branch_diff, extract_files_as_context, extract_staged_diff
-from ebert.models import DiffContext, FocusArea, ReviewContext, ReviewMode, ReviewResult
+from ebert.models import (
+  DiffContext,
+  EngineMode,
+  FocusArea,
+  ReviewContext,
+  ReviewMode,
+  ReviewResult,
+)
 from ebert.providers import ProviderRegistry, get_provider
+from ebert.rules import RuleEngine, RuleRegistry
 
 
 class ReviewOrchestrator:
@@ -39,12 +47,17 @@ class ReviewOrchestrator:
     return self._perform_review(diff)
 
   def _perform_review(self, diff: DiffContext) -> ReviewResult:
-    """Perform review with configured provider."""
+    """Perform review with configured engine."""
     if not diff.files:
+      engine_name = (
+        "deterministic"
+        if self.settings.engine == EngineMode.DETERMINISTIC
+        else self.settings.provider
+      )
       return ReviewResult(
         comments=[],
         summary="No changes to review.",
-        provider=self.settings.provider,
+        provider=engine_name,
         model=self.settings.model or "N/A",
       )
 
@@ -56,13 +69,19 @@ class ReviewOrchestrator:
       max_comments=self.settings.max_comments,
     )
 
-    provider = get_provider(self.settings.provider, self.settings.model)
-    return provider.review(context)
+    # Route based on engine mode
+    if self.settings.engine == EngineMode.DETERMINISTIC:
+      engine = RuleEngine()
+      return engine.review(context)
+    else:
+      provider = get_provider(self.settings.provider, self.settings.model)
+      return provider.review(context)
 
 
 def run_review(
   branch: str | None = None,
   base: str = "main",
+  engine: EngineMode | None = None,
   provider: str | None = None,
   model: str | None = None,
   mode: ReviewMode = ReviewMode.QUICK,
@@ -71,11 +90,21 @@ def run_review(
   files: list[str] | None = None,
 ) -> ReviewResult:
   """Run a code review with the given options."""
-  ProviderRegistry.load_all()
   settings = load_config(config_path).model_copy(deep=True)
 
-  if provider:
-    settings.provider = provider
+  # Set engine mode
+  if engine:
+    settings.engine = engine
+
+  # Only load providers if using LLM engine
+  if settings.engine == EngineMode.LLM:
+    ProviderRegistry.load_all()
+    if provider:
+      settings.provider = provider
+  else:
+    # Load rules for deterministic engine
+    RuleRegistry.load_all()
+
   if model:
     settings.model = model
   if mode:

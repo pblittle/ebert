@@ -10,7 +10,7 @@ from rich.console import Console
 
 from ebert import __version__
 from ebert.diff import FileError
-from ebert.models import FocusArea, ReviewMode
+from ebert.models import EngineMode, FocusArea, ReviewMode
 from ebert.output import get_formatter
 from ebert.providers.registry import ProviderNotFoundError, ProviderUnavailableError
 from ebert.review import run_review
@@ -42,8 +42,14 @@ def main(
   ),
   branch: str = typer.Option(None, "--branch", "-b", help="Branch to review against base"),
   base: str = typer.Option("main", "--base", help="Base branch for comparison"),
+  engine: str = typer.Option(
+    "deterministic",
+    "--engine",
+    "-e",
+    help="Review engine: deterministic (default, no API key) or llm",
+  ),
   provider: str = typer.Option(
-    None, "--provider", "-p", help="LLM provider (gemini, openai, anthropic, ollama)"
+    None, "--provider", "-p", help="LLM provider (only with --engine llm)"
   ),
   model: str = typer.Option(None, "--model", "-m", help="Model to use"),
   full: bool = typer.Option(False, "--full", "-f", help="Full review (default: quick review)"),
@@ -55,11 +61,28 @@ def main(
   debug: bool = typer.Option(False, "--debug", "-d", help="Show full traceback on errors"),
   version: bool = typer.Option(None, "--version", "-v", callback=version_callback, is_eager=True),
 ) -> None:
-  """Review code changes using AI.
+  """Review code changes.
 
-  With no arguments, reviews staged git changes.
-  With file arguments, reviews the specified files directly.
+  With no arguments, reviews staged git changes using deterministic rules.
+  Use --engine llm --provider <name> for AI-powered review.
   """
+  # Parse and validate engine mode
+  try:
+    engine_mode = EngineMode(engine.lower())
+  except ValueError:
+    console.print(f"[red]Error:[/red] Invalid engine '{engine}'. Use 'deterministic' or 'llm'.")
+    raise typer.Exit(1) from None
+
+  # Validate: --provider only valid with --engine llm
+  if provider and engine_mode != EngineMode.LLM:
+    console.print("[red]Error:[/red] --provider is only valid with --engine llm")
+    raise typer.Exit(1) from None
+
+  # Require provider when using LLM engine
+  if engine_mode == EngineMode.LLM and not provider:
+    console.print("[red]Error:[/red] --engine llm requires --provider")
+    raise typer.Exit(1) from None
+
   mode = ReviewMode.FULL if full else ReviewMode.QUICK
   focus_areas = _parse_focus(focus) if focus else None
   show_traceback = debug or _is_debug()
@@ -68,6 +91,7 @@ def main(
     result = run_review(
       branch=branch,
       base=base,
+      engine=engine_mode,
       provider=provider,
       model=model,
       mode=mode,
