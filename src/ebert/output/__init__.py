@@ -1,11 +1,11 @@
 """Output formatting."""
 
 from ebert.output.formatter import (
-  OutputFormatter,
-  TerminalFormatter,
-  JsonFormatter,
-  MarkdownFormatter,
-  get_formatter,
+    JsonFormatter,
+    MarkdownFormatter,
+    OutputFormatter,
+    TerminalFormatter,
+    get_formatter,
 )
 
 __all__ = [
