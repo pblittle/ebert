@@ -145,14 +145,12 @@ def _resolve_patterns(patterns: list[str], base_path: Path) -> list[Path]:
 
 def _expand_pattern(pattern: str, base_path: Path) -> list[Path]:
   """Expand a single pattern to matching paths."""
-  pattern_path = Path(pattern)
-  if pattern_path.is_absolute():
-    if any(c in pattern for c in "*?["):
-      return [Path(p) for p in globmod.glob(pattern, recursive=True)]
-    return [pattern_path]
+  p = Path(pattern)
+  glob_path = p if p.is_absolute() else base_path / p
+
   if any(c in pattern for c in "*?["):
-    return [Path(p) for p in globmod.glob(str(base_path / pattern), recursive=True)]
-  return [base_path / pattern]
+    return [Path(match) for match in globmod.glob(str(glob_path), recursive=True)]
+  return [glob_path]
 
 
 def _read_file_as_diff(file_path: Path, base_path: Path) -> FileDiff:
@@ -161,9 +159,6 @@ def _read_file_as_diff(file_path: Path, base_path: Path) -> FileDiff:
     rel_path = str(file_path.relative_to(base_path))
   except ValueError:
     rel_path = str(file_path)
-
-  if not file_path.exists():
-    raise FileError(f"File not found: {rel_path}")
 
   try:
     content = file_path.read_text()
@@ -180,7 +175,7 @@ def _read_file_as_diff(file_path: Path, base_path: Path) -> FileDiff:
 
 def _format_as_diff(path: str, content: str) -> str:
   """Format file content as unified diff."""
-  lines = content.split("\n")
+  lines = content.split("\n") if content else []
   line_count = len(lines)
 
   header = "\n".join([
