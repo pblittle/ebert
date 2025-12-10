@@ -86,7 +86,6 @@ def main(
     raise typer.Exit(1) from None
   except ProviderUnavailableError as e:
     console.print(f"[red]Error:[/red] {e}")
-    console.print("[dim]Set the appropriate API key environment variable.[/dim]")
     raise typer.Exit(1) from None
   except FileError as e:
     console.print(f"[red]Error:[/red] {e}")
