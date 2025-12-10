@@ -2,10 +2,11 @@
 
 from pathlib import Path
 
-from ebert.config import Settings, load_config
+from ebert.config import Settings, has_provider_in_config, load_config
 from ebert.diff import extract_branch_diff, extract_files_as_context, extract_staged_diff
 from ebert.models import DiffContext, FocusArea, ReviewContext, ReviewMode, ReviewResult
 from ebert.providers import ProviderRegistry, get_provider
+from ebert.providers.registry import detect_available_provider
 
 
 class ReviewOrchestrator:
@@ -13,7 +14,6 @@ class ReviewOrchestrator:
 
   def __init__(self, settings: Settings | None = None):
     self.settings = settings or Settings()
-    ProviderRegistry.load_all()
 
   def review_staged(self, cwd: Path | None = None) -> ReviewResult:
     """Review staged changes."""
@@ -72,10 +72,17 @@ def run_review(
   files: list[str] | None = None,
 ) -> ReviewResult:
   """Run a code review with the given options."""
+  ProviderRegistry.load_all()
   settings = load_config(config_path).model_copy(deep=True)
 
+  # Apply provider selection: CLI > config > auto-detect > default
   if provider:
     settings.provider = provider
+  elif settings.provider == "auto" or not has_provider_in_config(config_path):
+    detected = detect_available_provider()
+    if detected:
+      settings.provider = detected
+
   if model:
     settings.model = model
   if mode:
