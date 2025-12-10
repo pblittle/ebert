@@ -3,6 +3,7 @@
 from typing import Callable
 
 from ebert.providers.base import ReviewProvider
+from ebert.providers.detection import ProviderDetector
 
 
 class ProviderNotFoundError(Exception):
@@ -34,11 +35,15 @@ def get_provider(name: str, model: str | None = None) -> ReviewProvider:
   provider = _providers[name](model)
 
   if not provider.is_available():
-    raise ProviderUnavailableError(
-      f"Provider '{name}' is not available. Check API key configuration."
-    )
+    detector = ProviderDetector(_providers)
+    raise ProviderUnavailableError(detector.format_error(name))
 
   return provider
+
+
+def detect_available_provider() -> str | None:
+  """Detect first available provider based on environment."""
+  return ProviderDetector(_providers).detect()
 
 
 def list_providers() -> list[str]:
@@ -52,4 +57,4 @@ class ProviderRegistry:
   @staticmethod
   def load_all() -> None:
     """Load all provider modules to trigger registration."""
-    from ebert.providers import gemini, openai, anthropic, ollama  # noqa: F401
+    from ebert.providers import anthropic, gemini, ollama, openai  # noqa: F401
