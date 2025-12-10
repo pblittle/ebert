@@ -61,6 +61,11 @@ class RuleRegistry:
     """
     # Import rule modules here to trigger registration
     # Each module registers its rules at import time
+    from ebert.rules.quality import (
+      commented_code,  # noqa: F401
+      debug,  # noqa: F401
+      todos,  # noqa: F401
+    )
     from ebert.rules.security import (
       credentials,  # noqa: F401
       merge_conflicts,  # noqa: F401
