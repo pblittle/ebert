@@ -1,10 +1,10 @@
 """Diff extraction and parsing."""
 
 from ebert.diff.extractor import (
-  extract_branch_diff,
-  extract_files_as_context,
-  extract_staged_diff,
-  FileError,
+    FileError,
+    extract_branch_diff,
+    extract_files_as_context,
+    extract_staged_diff,
 )
 
 __all__ = [
