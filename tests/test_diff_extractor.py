@@ -3,13 +3,12 @@
 from pathlib import Path
 
 import pytest
-
 from ebert.diff.extractor import (
-  extract_files_as_context,
   FileError,
-  parse_diff_output,
   _format_as_diff,
   _resolve_patterns,
+  extract_files_as_context,
+  parse_diff_output,
 )
 
 
