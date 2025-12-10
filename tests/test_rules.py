@@ -12,7 +12,7 @@ from ebert.models import (
   Severity,
 )
 from ebert.rules.base import Rule, RuleMatch
-from ebert.rules.engine import RuleEngine, _extract_content_from_diff
+from ebert.rules.engine import RuleEngine, _extract_content_with_line_map
 from ebert.rules.registry import (
   get_all_rules,
   get_rules_for_focus,
@@ -87,14 +87,14 @@ class TestRuleProtocol:
     assert rule.check("test.py", "") == []
 
 
-class TestExtractContentFromDiff:
+class TestExtractContentWithLineMap:
   def test_extracts_added_lines(self) -> None:
     diff = """+line 1
 +line 2
 -removed line
 +line 3"""
 
-    content = _extract_content_from_diff(diff)
+    content, line_map = _extract_content_with_line_map(diff)
 
     assert "line 1" in content
     assert "line 2" in content
@@ -108,7 +108,7 @@ class TestExtractContentFromDiff:
 +new line
  existing line"""
 
-    content = _extract_content_from_diff(diff)
+    content, line_map = _extract_content_with_line_map(diff)
 
     assert "new line" in content
     assert "existing line" in content
@@ -120,10 +120,27 @@ class TestExtractContentFromDiff:
     raw = """def foo():
     return 42"""
 
-    content = _extract_content_from_diff(raw)
+    content, line_map = _extract_content_with_line_map(raw)
 
     assert "def foo():" in content
     assert "return 42" in content
+    # Raw content should have 1:1 line mapping
+    assert line_map[1] == 1
+    assert line_map[2] == 2
+
+  def test_maps_line_numbers_from_hunk(self) -> None:
+    diff = """--- a/file.py
++++ b/file.py
+@@ -10,3 +10,4 @@
+ context line
++added line"""
+
+    content, line_map = _extract_content_with_line_map(diff)
+
+    # Line 1 in extracted content = line 10 in original file
+    assert line_map[1] == 10
+    # Line 2 in extracted content = line 11 in original file
+    assert line_map[2] == 11
 
 
 class TestRuleEngine:
