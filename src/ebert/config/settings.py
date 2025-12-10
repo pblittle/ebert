@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ebert.models import FocusArea, ReviewMode, Severity
+from ebert.models import EngineMode, FocusArea, ReviewMode, Severity
 
 
 class Settings(BaseModel):
@@ -10,6 +10,7 @@ class Settings(BaseModel):
 
   model_config = ConfigDict(use_enum_values=False)
 
+  engine: EngineMode = EngineMode.DETERMINISTIC
   provider: str = "gemini"
   model: str | None = None
   mode: ReviewMode = ReviewMode.QUICK

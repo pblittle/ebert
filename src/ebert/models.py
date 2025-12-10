@@ -22,6 +22,13 @@ class ReviewMode(Enum):
   FULL = "full"
 
 
+class EngineMode(Enum):
+  """Review execution engine."""
+
+  DETERMINISTIC = "deterministic"
+  LLM = "llm"
+
+
 class FocusArea(Enum):
   """Areas to focus the review on."""
 
