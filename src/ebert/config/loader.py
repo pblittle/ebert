@@ -10,16 +10,35 @@ from ebert.models import FocusArea, ReviewMode, Severity
 CONFIG_FILENAMES = [".ebert.yaml", ".ebert.yml", "ebert.yaml", "ebert.yml"]
 
 
-def load_config(config_path: Path | None = None) -> Settings:
-  """Load configuration from file or defaults."""
-  if config_path:
-    return _load_from_file(config_path)
+def _find_config_file(config_path: Path | None = None) -> Path | None:
+  """Find config file path, or None if no config exists."""
+  if config_path and config_path.exists():
+    return config_path
 
   for filename in CONFIG_FILENAMES:
     path = Path.cwd() / filename
     if path.exists():
-      return _load_from_file(path)
+      return path
 
+  return None
+
+
+def has_provider_in_config(config_path: Path | None = None) -> bool:
+  """Check if provider is explicitly configured in a config file."""
+  path = _find_config_file(config_path)
+  if not path:
+    return False
+
+  with open(path) as f:
+    data = yaml.safe_load(f) or {}
+  return "provider" in data
+
+
+def load_config(config_path: Path | None = None) -> Settings:
+  """Load configuration from file or defaults."""
+  path = _find_config_file(config_path)
+  if path:
+    return _load_from_file(path)
   return Settings()
 
 
