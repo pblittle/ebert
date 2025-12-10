@@ -1,8 +1,15 @@
 """Tests for diff extraction."""
 
-import pytest
+from pathlib import Path
 
-from ebert.diff.extractor import parse_diff_output
+import pytest
+from ebert.diff.extractor import (
+  FileError,
+  _format_as_diff,
+  _resolve_patterns,
+  extract_files_as_context,
+  parse_diff_output,
+)
 
 
 class TestParseDiffOutput:
@@ -73,3 +80,111 @@ index 1234567..abcdefg 100644
     assert len(result) == 2
     assert result[0].path == "file1.py"
     assert result[1].path == "file2.py"
+
+
+class TestFormatAsDiff:
+  def test_formats_content_as_unified_diff(self) -> None:
+    content = "line1\nline2"
+    result = _format_as_diff("test.py", content)
+
+    assert "diff --git a/test.py b/test.py" in result
+    assert "new file mode 100644" in result
+    assert "--- /dev/null" in result
+    assert "+++ b/test.py" in result
+    assert "@@ -0,0 +1,2 @@" in result
+    assert "+line1" in result
+    assert "+line2" in result
+
+  def test_single_line_file(self) -> None:
+    result = _format_as_diff("single.txt", "only line")
+    assert "@@ -0,0 +1,1 @@" in result
+
+
+class TestResolvePatterns:
+  def test_resolves_explicit_file(self, tmp_path: Path) -> None:
+    test_file = tmp_path / "test.py"
+    test_file.write_text("content")
+
+    result = _resolve_patterns(["test.py"], tmp_path)
+
+    assert len(result) == 1
+    assert result[0] == test_file
+
+  def test_resolves_glob_pattern(self, tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text("a")
+    (tmp_path / "b.py").write_text("b")
+    (tmp_path / "c.txt").write_text("c")
+
+    result = _resolve_patterns(["*.py"], tmp_path)
+
+    assert len(result) == 2
+    paths = {p.name for p in result}
+    assert paths == {"a.py", "b.py"}
+
+  def test_skips_directories(self, tmp_path: Path) -> None:
+    (tmp_path / "subdir").mkdir()
+    (tmp_path / "file.py").write_text("content")
+
+    result = _resolve_patterns(["*"], tmp_path)
+
+    assert len(result) == 1
+    assert result[0].name == "file.py"
+
+  def test_deduplicates_paths(self, tmp_path: Path) -> None:
+    test_file = tmp_path / "test.py"
+    test_file.write_text("content")
+
+    result = _resolve_patterns(["test.py", "test.py", "*.py"], tmp_path)
+
+    assert len(result) == 1
+
+
+class TestExtractFilesAsContext:
+  def test_extracts_single_file(self, tmp_path: Path) -> None:
+    test_file = tmp_path / "test.py"
+    test_file.write_text("def foo():\n  pass")
+
+    result = extract_files_as_context(["test.py"], tmp_path)
+
+    assert len(result.files) == 1
+    assert result.files[0].path == "test.py"
+    assert result.files[0].is_new
+    assert not result.files[0].is_deleted
+    assert "+def foo():" in result.files[0].content
+
+  def test_extracts_multiple_files(self, tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text("a")
+    (tmp_path / "b.py").write_text("b")
+
+    result = extract_files_as_context(["a.py", "b.py"], tmp_path)
+
+    assert len(result.files) == 2
+    paths = {f.path for f in result.files}
+    assert paths == {"a.py", "b.py"}
+
+  def test_extracts_glob_pattern(self, tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "main.py").write_text("main")
+    (tmp_path / "src" / "util.py").write_text("util")
+
+    result = extract_files_as_context(["src/*.py"], tmp_path)
+
+    assert len(result.files) == 2
+
+  def test_raises_on_no_matches(self, tmp_path: Path) -> None:
+    with pytest.raises(FileError, match="No files matched"):
+      extract_files_as_context(["nonexistent.py"], tmp_path)
+
+  def test_raises_on_missing_file(self, tmp_path: Path) -> None:
+    (tmp_path / "exists.py").write_text("content")
+
+    with pytest.raises(FileError, match="No files matched"):
+      extract_files_as_context(["missing.py"], tmp_path)
+
+  def test_context_refs(self, tmp_path: Path) -> None:
+    (tmp_path / "test.py").write_text("content")
+
+    result = extract_files_as_context(["test.py"], tmp_path)
+
+    assert result.base_ref == "N/A"
+    assert result.target_ref == "files"

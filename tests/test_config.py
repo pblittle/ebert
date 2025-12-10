@@ -3,9 +3,7 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
-from ebert.config.loader import load_config, _parse_config
+from ebert.config.loader import _parse_config, load_config
 from ebert.config.settings import Settings
 from ebert.models import FocusArea, ReviewMode, Severity
 
@@ -72,3 +70,4 @@ max_comments: 10
     assert settings.mode == ReviewMode.QUICK
     assert settings.focus == [FocusArea.SECURITY]
     assert settings.severity_threshold == Severity.HIGH
+

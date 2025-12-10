@@ -3,8 +3,7 @@
 import json
 
 import pytest
-
-from ebert.models import ReviewResult, ReviewComment, Severity
+from ebert.models import ReviewResult
 from ebert.output.formatter import JsonFormatter, MarkdownFormatter, get_formatter
 
 

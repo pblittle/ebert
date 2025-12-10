@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from ebert.config import Settings, load_config
-from ebert.diff import extract_staged_diff, extract_branch_diff
+from ebert.diff import extract_branch_diff, extract_files_as_context, extract_staged_diff
 from ebert.models import DiffContext, FocusArea, ReviewContext, ReviewMode, ReviewResult
 from ebert.providers import ProviderRegistry, get_provider
 
@@ -13,7 +13,6 @@ class ReviewOrchestrator:
 
   def __init__(self, settings: Settings | None = None):
     self.settings = settings or Settings()
-    ProviderRegistry.load_all()
 
   def review_staged(self, cwd: Path | None = None) -> ReviewResult:
     """Review staged changes."""
@@ -28,6 +27,15 @@ class ReviewOrchestrator:
   ) -> ReviewResult:
     """Review changes between branches."""
     diff = extract_branch_diff(branch, base, cwd)
+    return self._perform_review(diff)
+
+  def review_files(
+    self,
+    files: list[str],
+    cwd: Path | None = None,
+  ) -> ReviewResult:
+    """Review specified files."""
+    diff = extract_files_as_context(files, cwd)
     return self._perform_review(diff)
 
   def _perform_review(self, diff: DiffContext) -> ReviewResult:
@@ -60,8 +68,10 @@ def run_review(
   mode: ReviewMode = ReviewMode.QUICK,
   focus: list[FocusArea] | None = None,
   config_path: Path | None = None,
+  files: list[str] | None = None,
 ) -> ReviewResult:
   """Run a code review with the given options."""
+  ProviderRegistry.load_all()
   settings = load_config(config_path).model_copy(deep=True)
 
   if provider:
@@ -75,6 +85,8 @@ def run_review(
 
   orchestrator = ReviewOrchestrator(settings)
 
+  if files:
+    return orchestrator.review_files(files)
   if branch:
     return orchestrator.review_branch(branch, base)
   return orchestrator.review_staged()
