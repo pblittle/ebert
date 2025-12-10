@@ -167,3 +167,21 @@ def next_func():
     matches = rule.check("test.py", content)
 
     assert len(matches) == 1
+
+  def test_handles_single_line_functions(self, rule: FunctionLengthRule) -> None:
+    """Test that single-line brace functions don't break subsequent detection."""
+    content = """function one() { return 1; }
+function two() {
+  const a = 1;
+  const b = 2;
+  const c = 3;
+  const d = 4;
+  const e = 5;
+  return e;
+}
+function three() { return 3; }"""
+    matches = rule.check("test.js", content)
+
+    # Only 'two' should be detected as long (7 lines > 5 threshold)
+    assert len(matches) == 1
+    assert "two" in matches[0].message

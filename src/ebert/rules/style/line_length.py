@@ -21,6 +21,14 @@ class LineLengthRule:
   DEFAULT_WARNING_LENGTH = 120
   DEFAULT_ERROR_LENGTH = 150
 
+  # File extensions where long lines are common/acceptable
+  _SKIP_EXTENSIONS = (
+    ".md",    # Markdown often has long URLs
+    ".json",  # JSON formatting is often on one line
+    ".svg",   # SVG files have long paths
+    ".lock",  # Lock files
+  )
+
   def __init__(
     self,
     warning_length: int = DEFAULT_WARNING_LENGTH,
@@ -71,13 +79,7 @@ class LineLengthRule:
 
   def _should_skip(self, file_path: str) -> bool:
     """Check if file should be skipped."""
-    skip_extensions = (
-      ".md",    # Markdown often has long URLs
-      ".json",  # JSON formatting is often on one line
-      ".svg",   # SVG files have long paths
-      ".lock",  # Lock files
-    )
-    return file_path.endswith(skip_extensions)
+    return file_path.endswith(self._SKIP_EXTENSIONS)
 
 
 def _create_line_length() -> LineLengthRule:

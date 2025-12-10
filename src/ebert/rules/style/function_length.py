@@ -127,12 +127,16 @@ class FunctionLengthRule:
 
     for i in range(start, len(lines)):
       line = lines[i]
-      brace_count += line.count("{") - line.count("}")
 
-      if brace_count > 0:
+      # Function body starts when we see an opening brace
+      if not started and "{" in line:
         started = True
-      elif started and brace_count <= 0:
-        return i - start + 1
+
+      if started:
+        brace_count += line.count("{") - line.count("}")
+        # Function ends when brace count returns to 0 or less
+        if brace_count <= 0:
+          return i - start + 1
 
     return len(lines) - start
 
