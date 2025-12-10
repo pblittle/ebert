@@ -1,7 +1,6 @@
 """Pytest fixtures."""
 
 import pytest
-
 from ebert.models import (
   DiffContext,
   FileDiff,
