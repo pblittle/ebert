@@ -18,22 +18,19 @@ class DebugStatementRule:
   - Ruby: puts, p, pp, binding.pry
   """
 
+  # Shared pattern for JS/TS files (DRY)
+  _JS_TS_PATTERN = re.compile(
+    r"^\s*(?:console\.(?:log|debug|warn|error|trace|info)\s*\(|debugger\b)"
+  )
+
   PATTERNS: dict[str, re.Pattern[str]] = {
     ".py": re.compile(
       r"^\s*(?:print\s*\(|breakpoint\s*\(|import\s+pdb|pdb\.set_trace\s*\()"
     ),
-    ".js": re.compile(
-      r"^\s*(?:console\.(?:log|debug|warn|error|trace|info)\s*\(|debugger\b)"
-    ),
-    ".ts": re.compile(
-      r"^\s*(?:console\.(?:log|debug|warn|error|trace|info)\s*\(|debugger\b)"
-    ),
-    ".tsx": re.compile(
-      r"^\s*(?:console\.(?:log|debug|warn|error|trace|info)\s*\(|debugger\b)"
-    ),
-    ".jsx": re.compile(
-      r"^\s*(?:console\.(?:log|debug|warn|error|trace|info)\s*\(|debugger\b)"
-    ),
+    ".js": _JS_TS_PATTERN,
+    ".ts": _JS_TS_PATTERN,
+    ".tsx": _JS_TS_PATTERN,
+    ".jsx": _JS_TS_PATTERN,
     ".go": re.compile(
       r"^\s*(?:fmt\.Print|log\.Print)"
     ),
