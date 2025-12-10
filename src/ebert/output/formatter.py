@@ -105,7 +105,7 @@ class MarkdownFormatter(OutputFormatter):
 
   def format(self, result: ReviewResult) -> str:
     lines = [
-      f"# Code Review",
+      "# Code Review",
       "",
       f"**Provider:** {result.provider}/{result.model}",
       "",
