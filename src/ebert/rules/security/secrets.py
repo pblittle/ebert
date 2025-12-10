@@ -69,6 +69,7 @@ class HardcodedSecretRule:
       if stripped.startswith("#") or stripped.startswith("//"):
         continue
 
+      # Use independent if statements to detect multiple secret types
       if self.ASSIGNMENT_PATTERN.search(line):
         matches.append(RuleMatch(
           line=i,
@@ -76,7 +77,7 @@ class HardcodedSecretRule:
           message="Potential hardcoded secret detected",
           suggestion="Use environment variables or a secrets manager",
         ))
-      elif self.PREFIX_PATTERN.search(line):
+      if self.PREFIX_PATTERN.search(line):
         matches.append(RuleMatch(
           line=i,
           severity=Severity.CRITICAL,

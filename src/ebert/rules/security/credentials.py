@@ -75,6 +75,7 @@ class CredentialPatternRule:
     matches: list[RuleMatch] = []
 
     for i, line in enumerate(content.split("\n"), start=1):
+      # Use independent if statements to detect multiple credential types
       if self.AWS_ACCESS_KEY.search(line):
         matches.append(RuleMatch(
           line=i,
@@ -82,21 +83,21 @@ class CredentialPatternRule:
           message="AWS access key ID detected",
           suggestion="Use IAM roles or environment variables instead",
         ))
-      elif self.AWS_SECRET_KEY.search(line):
+      if self.AWS_SECRET_KEY.search(line):
         matches.append(RuleMatch(
           line=i,
           severity=Severity.CRITICAL,
           message="Potential AWS secret key detected",
           suggestion="Use IAM roles or AWS Secrets Manager",
         ))
-      elif self.PRIVATE_KEY.search(line):
+      if self.PRIVATE_KEY.search(line):
         matches.append(RuleMatch(
           line=i,
           severity=Severity.CRITICAL,
           message="Private key detected in code",
           suggestion="Store private keys in secure key management system",
         ))
-      elif self.CONNECTION_STRING.search(line):
+      if self.CONNECTION_STRING.search(line):
         # Skip if it looks like a placeholder
         if not self._is_placeholder(line):
           matches.append(RuleMatch(
