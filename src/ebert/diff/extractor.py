@@ -116,19 +116,253 @@ def parse_diff_output(diff_output: str) -> list[FileDiff]:
 def extract_files_as_context(
   patterns: list[str],
   cwd: Path | None = None,
+  no_ignore: bool = False,
 ) -> DiffContext:
   """Read files and return as DiffContext for review."""
   base_path = cwd or Path.cwd()
-  resolved = _resolve_patterns(patterns, base_path)
+  expanded = _expand_directories(patterns, base_path)
+  resolved = _resolve_patterns(expanded, base_path, no_ignore=no_ignore)
   files = [_read_file_as_diff(p, base_path) for p in resolved]
 
   if not files:
-    raise FileError("No files matched the provided patterns")
+    raise FileError(_no_files_error(patterns, base_path))
 
   return DiffContext(files=files, base_ref="N/A", target_ref="files")
 
 
-def _resolve_patterns(patterns: list[str], base_path: Path) -> list[Path]:
+# Fallback excludes when not in a git repo
+_FALLBACK_EXCLUDES: set[str] = {
+  "node_modules",
+  ".git",
+  "__pycache__",
+  ".venv",
+  "venv",
+  "dist",
+  "build",
+  ".next",
+  "target",
+  "vendor",
+}
+
+
+def _find_git_root(start: Path, cache: dict[Path, Path | None]) -> Path | None:
+  """Find git repository root using filesystem traversal (no subprocess).
+
+  Handles both regular repos (.git directory) and worktrees/submodules (.git file).
+  Uses memoization via the cache dict to avoid redundant traversal.
+  """
+  current = start if start.is_dir() else start.parent
+
+  # Check cache first
+  if current in cache:
+    return cache[current]
+
+  # Walk up until we find .git or hit root
+  visited: list[Path] = []
+  while current != current.parent:
+    visited.append(current)
+
+    if current in cache:
+      # Found cached result, propagate to all visited dirs
+      root = cache[current]
+      for d in visited:
+        cache[d] = root
+      return root
+
+    git_path = current / ".git"
+    if git_path.exists():
+      # Found a git boundary - could be dir (normal) or file (worktree/submodule)
+      for d in visited:
+        cache[d] = current
+      return current
+
+    current = current.parent
+
+  # Reached filesystem root without finding .git
+  for d in visited:
+    cache[d] = None
+  return None
+
+
+def _filter_ignored_paths(paths: list[Path], base_path: Path) -> list[Path]:
+  """Filter out paths that should be ignored based on .gitignore rules."""
+  if not paths:
+    return []
+
+  # Group paths by their git root (handles submodules)
+  # Cache git roots by directory to avoid redundant filesystem traversal
+  by_repo: dict[Path, list[Path]] = {}
+  fallback_paths: list[Path] = []
+  git_root_cache: dict[Path, Path | None] = {}
+
+  for p in paths:
+    git_root = _find_git_root(p, git_root_cache)
+    if git_root:
+      if git_root not in by_repo:
+        by_repo[git_root] = []
+      by_repo[git_root].append(p)
+    else:
+      fallback_paths.append(p)
+
+  # Filter each repo's paths with its own gitignore (one subprocess per repo)
+  result: list[Path] = []
+  for git_root, repo_paths in by_repo.items():
+    result.extend(_filter_with_git(repo_paths, git_root))
+
+  # Filter non-repo paths with fallback
+  result.extend(_filter_with_fallback(fallback_paths))
+
+  return result
+
+
+def _filter_with_git(paths: list[Path], base_path: Path) -> list[Path]:
+  """Use git check-ignore to filter paths."""
+  if not paths:
+    return []
+
+  # Convert to relative paths for git check-ignore
+  path_map: dict[str, Path] = {}
+  for p in paths:
+    try:
+      rel = str(p.relative_to(base_path))
+    except ValueError:
+      rel = str(p)
+    path_map[rel] = p
+
+  # Batch check with git check-ignore using stdin
+  try:
+    result = subprocess.run(
+      ["git", "check-ignore", "--stdin"],
+      cwd=base_path,
+      input="\n".join(path_map.keys()),
+      capture_output=True,
+      text=True,
+    )
+    # git check-ignore returns ignored paths on stdout (one per line)
+    ignored = set(result.stdout.strip().split("\n")) if result.stdout.strip() else set()
+    return [path_map[rel] for rel in path_map if rel not in ignored]
+  except (subprocess.CalledProcessError, FileNotFoundError):
+    # If git fails, fall back to hardcoded excludes
+    return _filter_with_fallback(paths)
+
+
+def _filter_with_fallback(paths: list[Path]) -> list[Path]:
+  """Filter paths using hardcoded exclude patterns."""
+  result = []
+  for path in paths:
+    parts = set(path.parts)
+    if not parts & _FALLBACK_EXCLUDES:
+      result.append(path)
+  return result
+
+
+# Common code file extensions by language/ecosystem
+_LANGUAGE_EXTENSIONS: dict[str, list[str]] = {
+  "python": ["py"],
+  "javascript": ["js", "jsx", "mjs", "cjs"],
+  "typescript": ["ts", "tsx", "mts", "cts"],
+  "go": ["go"],
+  "rust": ["rs"],
+  "java": ["java"],
+  "kotlin": ["kt", "kts"],
+  "ruby": ["rb"],
+  "php": ["php"],
+  "csharp": ["cs"],
+  "cpp": ["cpp", "cc", "cxx", "c", "h", "hpp"],
+  "swift": ["swift"],
+  "scala": ["scala"],
+}
+
+# Files that indicate a project's primary language
+_LANGUAGE_INDICATORS: dict[str, list[str]] = {
+  "python": ["pyproject.toml", "setup.py", "requirements.txt", "Pipfile"],
+  "javascript": ["package.json"],
+  "typescript": ["tsconfig.json", "package.json"],
+  "go": ["go.mod", "go.sum"],
+  "rust": ["Cargo.toml"],
+  "java": ["pom.xml", "build.gradle", "build.gradle.kts"],
+  "kotlin": ["build.gradle.kts"],
+  "ruby": ["Gemfile", "*.gemspec"],
+  "php": ["composer.json"],
+  "csharp": ["*.csproj", "*.sln"],
+  "cpp": ["CMakeLists.txt", "Makefile"],
+  "swift": ["Package.swift", "*.xcodeproj"],
+  "scala": ["build.sbt"],
+}
+
+
+def _expand_directories(patterns: list[str], base_path: Path) -> list[str]:
+  """Expand directory patterns to glob patterns based on detected language."""
+  result: list[str] = []
+
+  for pattern in patterns:
+    p = Path(pattern)
+    full_path = p if p.is_absolute() else base_path / p
+
+    if full_path.is_dir():
+      extensions = _detect_language_extensions(full_path)
+      if extensions:
+        for ext in extensions:
+          result.append(str(full_path / "**" / f"*.{ext}"))
+      else:
+        # No language detected, keep original (will fail with helpful message)
+        result.append(pattern)
+    else:
+      result.append(pattern)
+
+  return result
+
+
+def _detect_language_extensions(directory: Path) -> list[str]:
+  """Detect programming languages in a directory and return file extensions."""
+  extensions: list[str] = []
+
+  # Check for language indicator files
+  for lang, indicators in _LANGUAGE_INDICATORS.items():
+    for indicator in indicators:
+      if any(c in indicator for c in "*?["):
+        if list(directory.glob(indicator)):
+          extensions.extend(_LANGUAGE_EXTENSIONS.get(lang, []))
+          break
+      elif (directory / indicator).exists():
+        extensions.extend(_LANGUAGE_EXTENSIONS.get(lang, []))
+        break
+
+  # Deduplicate while preserving order
+  seen: set[str] = set()
+  unique: list[str] = []
+  for ext in extensions:
+    if ext not in seen:
+      seen.add(ext)
+      unique.append(ext)
+
+  return unique
+
+
+def _no_files_error(patterns: list[str], base_path: Path) -> str:
+  """Generate a helpful error message when no files are found."""
+  dirs = [p for p in patterns if (base_path / p).is_dir() or Path(p).is_dir()]
+
+  if dirs:
+    return (
+      f"No reviewable files found in: {', '.join(dirs)}\n"
+      "Could not detect project language. Try specifying files directly:\n"
+      f"  ebert {dirs[0]}/**/*.py    # Python\n"
+      f"  ebert {dirs[0]}/**/*.ts    # TypeScript\n"
+      f"  ebert {dirs[0]}/**/*.go    # Go"
+    )
+
+  return (
+    f"No files matched: {', '.join(patterns)}\n"
+    "Use glob patterns like: ebert 'src/**/*.py'"
+  )
+
+
+def _resolve_patterns(
+  patterns: list[str],
+  base_path: Path,
+  no_ignore: bool = False,
+) -> list[Path]:
   """Expand glob patterns and return unique file paths."""
   seen: set[Path] = set()
   result: list[Path] = []
@@ -140,7 +374,10 @@ def _resolve_patterns(patterns: list[str], base_path: Path) -> list[Path]:
         seen.add(path)
         result.append(path)
 
-  return result
+  # Filter out ignored paths (unless --no-ignore)
+  if no_ignore:
+    return result
+  return _filter_ignored_paths(result, base_path)
 
 
 def _expand_pattern(pattern: str, base_path: Path) -> list[Path]:
