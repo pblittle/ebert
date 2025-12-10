@@ -4,7 +4,6 @@ import json
 import re
 from typing import Any
 
-
 MAX_RESPONSE_LENGTH = 1_000_000  # 1MB limit for regex processing
 
 
