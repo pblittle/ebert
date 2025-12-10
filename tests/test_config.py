@@ -3,9 +3,7 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
-from ebert.config.loader import load_config, _parse_config
+from ebert.config.loader import _parse_config, has_provider_in_config, load_config
 from ebert.config.settings import Settings
 from ebert.models import FocusArea, ReviewMode, Severity
 
@@ -72,3 +70,20 @@ max_comments: 10
     assert settings.mode == ReviewMode.QUICK
     assert settings.focus == [FocusArea.SECURITY]
     assert settings.severity_threshold == Severity.HIGH
+
+  def test_has_provider_in_config_returns_true_when_set(self) -> None:
+    config_content = "provider: anthropic\n"
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+      f.write(config_content)
+      f.flush()
+      assert has_provider_in_config(Path(f.name)) is True
+
+  def test_has_provider_in_config_returns_false_when_not_set(self) -> None:
+    config_content = "mode: full\n"
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+      f.write(config_content)
+      f.flush()
+      assert has_provider_in_config(Path(f.name)) is False
+
+  def test_has_provider_in_config_returns_false_when_no_file(self) -> None:
+    assert has_provider_in_config(Path("/nonexistent/path.yaml")) is False
