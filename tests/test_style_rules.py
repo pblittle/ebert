@@ -217,3 +217,41 @@ end"""
     # outer is 6 lines, inner is 3 lines
     assert len(matches) == 1
     assert "outer" in matches[0].message
+
+  def test_detects_long_class_method(self, rule: FunctionLengthRule) -> None:
+    """Test that class methods are detected."""
+    content = """class MyClass {
+  shortMethod() {
+    return 1;
+  }
+
+  longMethod() {
+    const a = 1;
+    const b = 2;
+    const c = 3;
+    const d = 4;
+    const e = 5;
+    return e;
+  }
+}"""
+    matches = rule.check("test.js", content)
+
+    assert len(matches) == 1
+    assert "longMethod" in matches[0].message
+
+  def test_detects_object_literal_method(self, rule: FunctionLengthRule) -> None:
+    """Test that object literal methods are detected."""
+    content = """const obj = {
+  longMethod() {
+    const a = 1;
+    const b = 2;
+    const c = 3;
+    const d = 4;
+    const e = 5;
+    return e;
+  }
+}"""
+    matches = rule.check("test.ts", content)
+
+    assert len(matches) == 1
+    assert "longMethod" in matches[0].message

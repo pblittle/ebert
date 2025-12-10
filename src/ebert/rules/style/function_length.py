@@ -20,10 +20,13 @@ class FunctionLengthRule:
   DEFAULT_MAX_LINES = 50
 
   # Patterns to detect function starts
-  # JS/TS pattern: function name() or const/let/var name = () =>
+  # JS/TS pattern: function declarations, arrow functions, class methods, object methods
   _JS_FUNC_PATTERN = (
-    r"^\s*(?:async\s+)?(?:function\s+(\w+)|"
-    r"(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\([^)]*\)\s*=>)"
+    r"^\s*(?:async\s+)?(?:"
+    r"function\s+(\w+)|"  # function name()
+    r"(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\([^)]*\)\s*=>|"  # const name = () =>
+    r"(\w+)\s*\([^)]*\)\s*\{"  # method() { - class methods and object methods
+    r")"
   )
   # Java pattern: modifiers + return type + name()
   # Return type can include generics (List<String>) or arrays (int[])
@@ -41,15 +44,8 @@ class FunctionLengthRule:
     ".java": re.compile(_JAVA_FUNC_PATTERN),
   }
 
-  # Patterns to detect function/block ends
-  END_PATTERNS: dict[str, re.Pattern[str]] = {
-    ".py": re.compile(r"^(?!\s)"),  # Python: unindented line (dedent)
-    ".js": re.compile(r"^\s*\}"),
-    ".ts": re.compile(r"^\s*\}"),
-    ".go": re.compile(r"^\s*\}"),
-    ".rb": re.compile(r"^\s*end\b"),
-    ".java": re.compile(r"^\s*\}"),
-  }
+  # Extensions that use brace-based syntax
+  _BRACE_LANGUAGES = frozenset([".js", ".ts", ".go", ".java"])
 
   def __init__(self, max_lines: int = DEFAULT_MAX_LINES):
     self._max_lines = max_lines
@@ -115,14 +111,8 @@ class FunctionLengthRule:
     if file_path.endswith(".rb"):
       return self._measure_ruby_function(lines, start)
 
-    # Brace-based languages
-    end_pattern = None
-    for ext, pattern in self.END_PATTERNS.items():
-      if file_path.endswith(ext):
-        end_pattern = pattern
-        break
-
-    if end_pattern is None:
+    # Check if this is a brace-based language
+    if not any(file_path.endswith(ext) for ext in self._BRACE_LANGUAGES):
       return 1  # Can't measure, assume single line
 
     # Count braces for proper nesting
@@ -184,7 +174,7 @@ class FunctionLengthRule:
         depth += 1
 
       # Check for end keyword (decreases depth)
-      if line == "end" or line.startswith("end "):
+      if re.match(r"end\b", line):
         depth -= 1
         if depth == 0:
           return i - start + 1
