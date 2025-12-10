@@ -41,11 +41,6 @@ def get_provider(name: str, model: str | None = None) -> ReviewProvider:
   return provider
 
 
-def detect_available_provider() -> str | None:
-  """Detect first available provider based on environment."""
-  return ProviderDetector(_providers).detect()
-
-
 def list_providers() -> list[str]:
   """List registered provider names."""
   return list(_providers.keys())
