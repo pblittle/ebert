@@ -1,15 +1,14 @@
 """Tests for provider registry."""
 
 import pytest
-
+from ebert.models import ReviewContext, ReviewResult
+from ebert.providers.base import ReviewProvider
 from ebert.providers.registry import (
   ProviderNotFoundError,
   get_provider,
   list_providers,
   register_provider,
 )
-from ebert.providers.base import ReviewProvider
-from ebert.models import ReviewContext, ReviewResult
 
 
 class MockProvider(ReviewProvider):
