@@ -41,9 +41,10 @@ class ReviewOrchestrator:
     self,
     files: list[str],
     cwd: Path | None = None,
+    no_ignore: bool = False,
   ) -> ReviewResult:
     """Review specified files."""
-    diff = extract_files_as_context(files, cwd)
+    diff = extract_files_as_context(files, cwd, no_ignore=no_ignore)
     return self._perform_review(diff)
 
   def _perform_review(self, diff: DiffContext) -> ReviewResult:
@@ -88,6 +89,7 @@ def run_review(
   focus: list[FocusArea] | None = None,
   config_path: Path | None = None,
   files: list[str] | None = None,
+  no_ignore: bool = False,
 ) -> ReviewResult:
   """Run a code review with the given options."""
   settings = load_config(config_path).model_copy(deep=True)
@@ -113,7 +115,7 @@ def run_review(
   orchestrator = ReviewOrchestrator(settings)
 
   if files:
-    return orchestrator.review_files(files)
+    return orchestrator.review_files(files, no_ignore=no_ignore)
   if branch:
     return orchestrator.review_branch(branch, base)
   return orchestrator.review_staged()

@@ -58,6 +58,9 @@ def main(
     "terminal", "--format", help="Output format: terminal, json, markdown"
   ),
   config: Path = typer.Option(None, "--config", "-c", help="Config file path"),
+  no_ignore: bool = typer.Option(
+    False, "--no-ignore", help="Disable .gitignore filtering (include all files)"
+  ),
   debug: bool = typer.Option(False, "--debug", "-d", help="Show full traceback on errors"),
   version: bool = typer.Option(None, "--version", "-v", callback=version_callback, is_eager=True),
 ) -> None:
@@ -104,6 +107,7 @@ def main(
       focus=focus_areas,
       config_path=config,
       files=files,
+      no_ignore=no_ignore,
     )
 
     formatter = get_formatter(format_type)
