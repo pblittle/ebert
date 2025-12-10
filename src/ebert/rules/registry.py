@@ -71,3 +71,7 @@ class RuleRegistry:
       merge_conflicts,  # noqa: F401
       secrets,  # noqa: F401
     )
+    from ebert.rules.style import (
+      function_length,  # noqa: F401
+      line_length,  # noqa: F401
+    )
