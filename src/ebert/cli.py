@@ -43,7 +43,7 @@ def main(
   branch: str = typer.Option(None, "--branch", "-b", help="Branch to review against base"),
   base: str = typer.Option("main", "--base", help="Base branch for comparison"),
   engine: str = typer.Option(
-    "deterministic",
+    None,
     "--engine",
     "-e",
     help="Review engine: deterministic (default, no API key) or llm",
@@ -66,19 +66,25 @@ def main(
   With no arguments, reviews staged git changes using deterministic rules.
   Use --engine llm --provider <name> for AI-powered review.
   """
-  # Parse and validate engine mode
-  try:
-    engine_mode = EngineMode(engine.lower())
-  except ValueError:
-    console.print(f"[red]Error:[/red] Invalid engine '{engine}'. Use 'deterministic' or 'llm'.")
-    raise typer.Exit(1) from None
+  # Parse and validate engine mode (if provided)
+  engine_mode: EngineMode | None = None
+  if engine:
+    try:
+      engine_mode = EngineMode(engine.lower())
+    except ValueError:
+      console.print(f"[red]Error:[/red] Invalid engine '{engine}'. Use 'deterministic' or 'llm'.")
+      raise typer.Exit(1) from None
 
-  # Validate: --provider only valid with --engine llm
-  if provider and engine_mode != EngineMode.LLM:
+  # --provider implies --engine llm when engine not explicitly set
+  if provider and engine_mode is None:
+    engine_mode = EngineMode.LLM
+
+  # Validate: --provider only valid with --engine llm (when engine is explicitly set)
+  if provider and engine_mode == EngineMode.DETERMINISTIC:
     console.print("[red]Error:[/red] --provider is only valid with --engine llm")
     raise typer.Exit(1) from None
 
-  # Require provider when using LLM engine
+  # Require provider when explicitly using LLM engine via CLI
   if engine_mode == EngineMode.LLM and not provider:
     console.print("[red]Error:[/red] --engine llm requires --provider")
     raise typer.Exit(1) from None

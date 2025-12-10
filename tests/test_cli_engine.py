@@ -7,8 +7,17 @@ runner = CliRunner()
 
 
 class TestEngineValidation:
-  def test_provider_requires_llm_engine(self) -> None:
+  def test_provider_implies_llm_engine(self) -> None:
+    # --provider alone implies --engine llm (will fail at provider level, not validation)
     result = runner.invoke(app, ["--provider", "anthropic"])
+
+    # Should NOT fail validation - provider implies llm engine
+    assert "--provider is only valid with --engine llm" not in result.output
+    assert "--engine llm requires --provider" not in result.output
+
+  def test_provider_incompatible_with_explicit_deterministic(self) -> None:
+    # --provider with explicit --engine deterministic should fail
+    result = runner.invoke(app, ["--engine", "deterministic", "--provider", "anthropic"])
 
     assert result.exit_code == 1
     assert "--provider is only valid with --engine llm" in result.output
@@ -25,12 +34,12 @@ class TestEngineValidation:
     assert result.exit_code == 1
     assert "Invalid engine" in result.output
 
-  def test_deterministic_is_default(self) -> None:
-    # This should not require --provider
+  def test_deterministic_engine_documented_in_help(self) -> None:
+    # Help text should mention deterministic as default
     result = runner.invoke(app, ["--help"])
 
     assert result.exit_code == 0
-    assert "deterministic (default" in result.output
+    assert "deterministic" in result.output
 
   def test_valid_llm_engine_with_provider_accepted(self) -> None:
     # This will fail due to missing API key, but should pass validation
