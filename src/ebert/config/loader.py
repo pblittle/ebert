@@ -23,17 +23,6 @@ def _find_config_file(config_path: Path | None = None) -> Path | None:
   return None
 
 
-def has_provider_in_config(config_path: Path | None = None) -> bool:
-  """Check if provider is explicitly configured in a config file."""
-  path = _find_config_file(config_path)
-  if not path:
-    return False
-
-  with open(path) as f:
-    data = yaml.safe_load(f) or {}
-  return "provider" in data
-
-
 def load_config(config_path: Path | None = None) -> Settings:
   """Load configuration from file or defaults."""
   path = _find_config_file(config_path)
