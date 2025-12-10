@@ -61,4 +61,8 @@ class RuleRegistry:
     """
     # Import rule modules here to trigger registration
     # Each module registers its rules at import time
-    pass  # No rules implemented yet - will be added in PR 2-4
+    from ebert.rules.security import (
+      credentials,  # noqa: F401
+      merge_conflicts,  # noqa: F401
+      secrets,  # noqa: F401
+    )
