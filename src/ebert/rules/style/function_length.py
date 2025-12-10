@@ -26,9 +26,10 @@ class FunctionLengthRule:
     r"(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)\s*=>|\(\)))"
   )
   # Java pattern: modifiers + return type + name()
+  # Return type can include generics (List<String>) or arrays (int[])
   _JAVA_FUNC_PATTERN = (
     r"^\s*(?:public|private|protected)?\s*"
-    r"(?:static\s+)?(?:\w+\s+)?(\w+)\s*\([^)]*\)\s*\{?"
+    r"(?:static\s+)?(?:[\w.<>\[\]]+\s+)?(\w+)\s*\([^)]*\)\s*\{?"
   )
 
   FUNCTION_PATTERNS: dict[str, re.Pattern[str]] = {
