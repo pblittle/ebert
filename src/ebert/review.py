@@ -13,7 +13,7 @@ from ebert.models import (
   ReviewResult,
 )
 from ebert.providers import ProviderRegistry, get_provider
-from ebert.rules import RuleEngine, RuleRegistry
+from ebert.rules import RuleEngine
 
 
 class ReviewOrchestrator:
@@ -101,9 +101,7 @@ def run_review(
     ProviderRegistry.load_all()
     if provider:
       settings.provider = provider
-  else:
-    # Load rules for deterministic engine
-    RuleRegistry.load_all()
+  # Note: RuleEngine handles lazy-loading of rules in its review() method
 
   if model:
     settings.model = model
