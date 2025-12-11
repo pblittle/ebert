@@ -185,7 +185,13 @@ def _find_git_root(start: Path, cache: dict[Path, Path | None]) -> Path | None:
 
 
 def _filter_ignored_paths(paths: list[Path], base_path: Path) -> list[Path]:
-  """Filter out paths that should be ignored based on .gitignore rules."""
+  """Filter out paths that should be ignored based on .gitignore rules.
+
+  Uses a two-phase approach:
+  1. git check-ignore for files in git repos (respects .gitignore)
+  2. Fallback excludes applied to ALL paths (catches common patterns like
+     nested node_modules that might not be in .gitignore)
+  """
   if not paths:
     return []
 
@@ -205,14 +211,16 @@ def _filter_ignored_paths(paths: list[Path], base_path: Path) -> list[Path]:
       fallback_paths.append(p)
 
   # Filter each repo's paths with its own gitignore (one subprocess per repo)
-  result: list[Path] = []
+  git_filtered: list[Path] = []
   for git_root, repo_paths in by_repo.items():
-    result.extend(_filter_with_git(repo_paths, git_root))
+    git_filtered.extend(_filter_with_git(repo_paths, git_root))
 
-  # Filter non-repo paths with fallback
-  result.extend(_filter_with_fallback(fallback_paths))
-
-  return result
+  # Apply fallback excludes to ALL results (both git-filtered and non-repo paths)
+  # This catches common patterns like node_modules that might be nested and not
+  # explicitly listed in .gitignore (e.g., vendors/pkg/node_modules when
+  # .gitignore only has 'node_modules/' instead of '**/node_modules/')
+  all_paths = git_filtered + fallback_paths
+  return _filter_with_fallback(all_paths)
 
 
 def _filter_with_git(paths: list[Path], base_path: Path) -> list[Path]:
@@ -249,8 +257,8 @@ def _filter_with_git(paths: list[Path], base_path: Path) -> list[Path]:
     ignored = {p for p in result.stdout.split("\0") if p}
     return [path_map[rel] for rel in path_map if rel not in ignored]
   except (subprocess.CalledProcessError, FileNotFoundError):
-    # If git fails, fall back to hardcoded excludes
-    return _filter_with_fallback(paths)
+    # If git fails, return all paths (fallback will be applied by caller)
+    return paths
 
 
 def _filter_with_fallback(paths: list[Path]) -> list[Path]:
