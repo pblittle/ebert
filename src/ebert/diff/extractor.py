@@ -205,9 +205,12 @@ def _filter_ignored_paths(paths: list[Path], base_path: Path) -> list[Path]:
       fallback_paths.append(p)
 
   # Filter each repo's paths with its own gitignore (one subprocess per repo)
+  # Then apply fallback excludes to catch patterns like nested node_modules
+  # that may not be in .gitignore with proper glob syntax
   result: list[Path] = []
   for git_root, repo_paths in by_repo.items():
-    result.extend(_filter_with_git(repo_paths, git_root))
+    git_filtered = _filter_with_git(repo_paths, git_root)
+    result.extend(_filter_with_fallback(git_filtered))
 
   # Filter non-repo paths with fallback
   result.extend(_filter_with_fallback(fallback_paths))
