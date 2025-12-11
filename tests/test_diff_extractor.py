@@ -5,7 +5,11 @@ from pathlib import Path
 import pytest
 from ebert.diff.extractor import (
   FileError,
+  _detect_language_extensions,
+  _expand_directories,
+  _filter_with_fallback,
   _format_as_diff,
+  _no_files_error,
   _resolve_patterns,
   extract_files_as_context,
   parse_diff_output,
@@ -188,3 +192,187 @@ class TestExtractFilesAsContext:
 
     assert result.base_ref == "N/A"
     assert result.target_ref == "files"
+
+  def test_expands_directory_with_python_project(self, tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("[project]")
+    (tmp_path / "main.py").write_text("print('hello')")
+    (tmp_path / "util.py").write_text("def util(): pass")
+
+    result = extract_files_as_context([str(tmp_path)], tmp_path)
+
+    assert len(result.files) == 2
+    paths = {f.path for f in result.files}
+    assert "main.py" in paths or any("main.py" in p for p in paths)
+
+  def test_expands_directory_with_typescript_project(self, tmp_path: Path) -> None:
+    (tmp_path / "tsconfig.json").write_text("{}")
+    (tmp_path / "index.ts").write_text("const x = 1;")
+    (tmp_path / "util.tsx").write_text("export const Y = () => null;")
+
+    result = extract_files_as_context([str(tmp_path)], tmp_path)
+
+    assert len(result.files) == 2
+
+  def test_expands_nested_directory(self, tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("[project]")
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.py").write_text("print('hello')")
+
+    result = extract_files_as_context([str(tmp_path)], tmp_path)
+
+    assert len(result.files) == 1
+    assert any("main.py" in f.path for f in result.files)
+
+
+class TestDetectLanguageExtensions:
+  def test_detects_python_from_pyproject(self, tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("")
+    result = _detect_language_extensions(tmp_path)
+    assert "py" in result
+
+  def test_detects_python_from_requirements(self, tmp_path: Path) -> None:
+    (tmp_path / "requirements.txt").write_text("")
+    result = _detect_language_extensions(tmp_path)
+    assert "py" in result
+
+  def test_detects_typescript_from_tsconfig(self, tmp_path: Path) -> None:
+    (tmp_path / "tsconfig.json").write_text("")
+    result = _detect_language_extensions(tmp_path)
+    assert "ts" in result
+    assert "tsx" in result
+
+  def test_detects_javascript_from_package_json(self, tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text("")
+    result = _detect_language_extensions(tmp_path)
+    assert "js" in result or "ts" in result
+
+  def test_detects_go_from_go_mod(self, tmp_path: Path) -> None:
+    (tmp_path / "go.mod").write_text("")
+    result = _detect_language_extensions(tmp_path)
+    assert "go" in result
+
+  def test_detects_rust_from_cargo(self, tmp_path: Path) -> None:
+    (tmp_path / "Cargo.toml").write_text("")
+    result = _detect_language_extensions(tmp_path)
+    assert "rs" in result
+
+  def test_returns_empty_for_unknown_project(self, tmp_path: Path) -> None:
+    result = _detect_language_extensions(tmp_path)
+    assert result == []
+
+  def test_deduplicates_extensions(self, tmp_path: Path) -> None:
+    # Both typescript and javascript indicators present
+    (tmp_path / "tsconfig.json").write_text("")
+    (tmp_path / "package.json").write_text("")
+    result = _detect_language_extensions(tmp_path)
+    # Should not have duplicate 'js' entries
+    assert len(result) == len(set(result))
+
+
+class TestExpandDirectories:
+  def test_expands_directory_to_glob_patterns(self, tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("")
+    result = _expand_directories([str(tmp_path)], tmp_path)
+    assert any("**/*.py" in p for p in result)
+
+  def test_passes_through_non_directories(self, tmp_path: Path) -> None:
+    result = _expand_directories(["src/*.py", "test.py"], tmp_path)
+    assert "src/*.py" in result
+    assert "test.py" in result
+
+  def test_keeps_directory_if_no_language_detected(self, tmp_path: Path) -> None:
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    result = _expand_directories([str(empty_dir)], tmp_path)
+    assert str(empty_dir) in result
+
+
+class TestNoFilesError:
+  def test_helpful_message_for_directory(self, tmp_path: Path) -> None:
+    test_dir = tmp_path / "myproject"
+    test_dir.mkdir()
+
+    error = _no_files_error([str(test_dir)], tmp_path)
+
+    assert "No reviewable files found" in error
+    assert "Could not detect project language" in error
+    assert "ebert" in error
+    assert "*.py" in error
+    assert "*.ts" in error
+
+  def test_simple_message_for_patterns(self, tmp_path: Path) -> None:
+    error = _no_files_error(["src/*.py", "lib/*.js"], tmp_path)
+
+    assert "No files matched" in error
+    assert "src/*.py" in error
+
+
+class TestFilterWithFallback:
+  def test_excludes_npm_deps(self) -> None:
+    # Use absolute paths to avoid pytest temp dir naming issues
+    paths = [
+      Path("/project/src/index.ts"),
+      Path("/project/node_modules/pkg/index.js"),
+    ]
+    result = _filter_with_fallback(paths)
+    assert len(result) == 1
+    assert result[0] == Path("/project/src/index.ts")
+
+  def test_excludes_pycache(self) -> None:
+    paths = [
+      Path("/project/main.py"),
+      Path("/project/__pycache__/main.cpython-311.pyc"),
+    ]
+    result = _filter_with_fallback(paths)
+    assert len(result) == 1
+    assert result[0] == Path("/project/main.py")
+
+  def test_excludes_venv(self) -> None:
+    paths = [
+      Path("/project/app.py"),
+      Path("/project/.venv/lib/site.py"),
+      Path("/project/venv/lib/site.py"),
+    ]
+    result = _filter_with_fallback(paths)
+    assert len(result) == 1
+    assert result[0].name == "app.py"
+
+  def test_excludes_build_dirs(self) -> None:
+    paths = [
+      Path("/project/src/main.rs"),
+      Path("/project/target/debug/main"),
+      Path("/project/dist/bundle.js"),
+      Path("/project/build/output.js"),
+    ]
+    result = _filter_with_fallback(paths)
+    assert len(result) == 1
+    assert result[0].name == "main.rs"
+
+  def test_keeps_non_excluded_paths(self) -> None:
+    paths = [
+      Path("/project/src/main.py"),
+      Path("/project/tests/test_main.py"),
+      Path("/project/lib/utils.py"),
+    ]
+    result = _filter_with_fallback(paths)
+    assert len(result) == 3
+
+
+class TestResolvePatternFiltering:
+  def test_filters_excluded_dirs_in_glob(self, tmp_path: Path) -> None:
+    # Create structure with excluded directory
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("const x = 1;")
+
+    # Use __pycache__ instead of node_modules to avoid pytest naming issues
+    cache = tmp_path / "__pycache__"
+    cache.mkdir()
+    (cache / "cached.pyc").write_text("cached")
+
+    result = _resolve_patterns(["**/*.ts", "**/*.pyc"], tmp_path)
+
+    # Should only get src/app.ts, not __pycache__ files
+    assert len(result) == 1
+    assert result[0].name == "app.ts"
