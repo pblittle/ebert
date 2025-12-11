@@ -376,3 +376,124 @@ class TestResolvePatternFiltering:
     # Should only get src/app.ts, not __pycache__ files
     assert len(result) == 1
     assert result[0].name == "app.ts"
+
+
+class TestGitIgnoreFiltering:
+  """Test git check-ignore based filtering."""
+
+  def test_filters_node_modules_via_gitignore(self, tmp_path: Path) -> None:
+    """Test that node_modules is filtered when listed in .gitignore."""
+    import subprocess
+
+    # Initialize a git repo
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+
+    # Create .gitignore with node_modules
+    (tmp_path / ".gitignore").write_text("node_modules/\n")
+
+    # Create source files
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "index.ts").write_text("export const x = 1;")
+
+    # Create node_modules (should be ignored)
+    node_modules = tmp_path / "node_modules"
+    node_modules.mkdir()
+    pkg = node_modules / "some-pkg"
+    pkg.mkdir()
+    (pkg / "index.js").write_text("module.exports = {};")
+
+    # Test that node_modules files are filtered out
+    result = _resolve_patterns(["**/*.ts", "**/*.js"], tmp_path)
+
+    # Should only get src/index.ts, not node_modules files
+    assert len(result) == 1
+    assert result[0].name == "index.ts"
+
+  def test_filters_nested_node_modules(self, tmp_path: Path) -> None:
+    """Test filtering node_modules in nested directories like vendors/."""
+    import subprocess
+
+    # Initialize a git repo
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+
+    # Create .gitignore - note: node_modules/ only matches at root level
+    # Many projects use **/node_modules/ but some only use node_modules/
+    # Our fallback should still catch nested node_modules
+    (tmp_path / ".gitignore").write_text("**/node_modules/\n")
+
+    # Create source files
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.ts").write_text("console.log('main');")
+
+    # Create nested structure: vendors/sub-project/node_modules
+    vendors = tmp_path / "vendors"
+    vendors.mkdir()
+    sub_project = vendors / "sub-project"
+    sub_project.mkdir()
+    (sub_project / "index.ts").write_text("export default {};")
+
+    # node_modules inside the sub-project
+    nested_nm = sub_project / "node_modules"
+    nested_nm.mkdir()
+    nested_pkg = nested_nm / "dep"
+    nested_pkg.mkdir()
+    (nested_pkg / "index.js").write_text("module.exports = 'dep';")
+
+    result = _resolve_patterns(["**/*.ts", "**/*.js"], tmp_path)
+
+    # Should get src/main.ts and vendors/sub-project/index.ts
+    # but NOT vendors/sub-project/node_modules/dep/index.js
+    paths = {p.name for p in result}
+    assert "main.ts" in paths
+    assert "index.ts" in paths
+    assert "index.js" not in paths
+    assert len(result) == 2
+
+  def test_filters_nested_node_modules_without_glob_pattern(self, tmp_path: Path) -> None:
+    """Test nested node_modules filtered even with root-level gitignore pattern.
+
+    Many repos only have 'node_modules/' in .gitignore which only matches at
+    root level. Our fallback should catch nested node_modules regardless.
+    """
+    import subprocess
+
+    # Initialize a git repo
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+
+    # Create .gitignore with ONLY root-level node_modules pattern
+    # This is what many older projects have
+    (tmp_path / ".gitignore").write_text("node_modules/\n")
+
+    # Create source files
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").write_text("const app = 'hello';")
+
+    # Create nested structure where node_modules is NOT at root
+    vendors = tmp_path / "vendors"
+    vendors.mkdir()
+    pkg = vendors / "some-pkg"
+    pkg.mkdir()
+    (pkg / "main.ts").write_text("export const x = 1;")
+
+    # node_modules inside vendors/some-pkg - NOT matched by root 'node_modules/'
+    nested_nm = pkg / "node_modules"
+    nested_nm.mkdir()
+    dep = nested_nm / "dep"
+    dep.mkdir()
+    (dep / "index.js").write_text("module.exports = 'nested';")
+
+    result = _resolve_patterns(["**/*.ts", "**/*.js"], tmp_path)
+
+    # Should get src/app.ts and vendors/some-pkg/main.ts
+    # Should NOT get vendors/some-pkg/node_modules/dep/index.js
+    # even though git check-ignore won't catch it (since 'node_modules/'
+    # only matches root level), our fallback should filter it
+    paths = {str(p.relative_to(tmp_path)) for p in result}
+    assert "src/app.ts" in paths or any("app.ts" in p for p in paths)
+    assert any("main.ts" in p for p in paths)
+    # The key assertion: no files from node_modules
+    assert not any("node_modules" in p for p in paths)
+    assert len(result) == 2
