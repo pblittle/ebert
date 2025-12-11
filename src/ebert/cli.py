@@ -15,6 +15,10 @@ from ebert.output import get_formatter
 from ebert.providers.registry import ProviderNotFoundError, ProviderUnavailableError
 from ebert.review import run_review
 
+# Valid focus areas derived from FocusArea enum (single source of truth)
+_VALID_FOCUS_AREAS = [a.value for a in FocusArea]
+_FOCUS_HELP = f"Focus areas (comma-separated): {', '.join(_VALID_FOCUS_AREAS)}"
+
 app = typer.Typer(
   name="ebert",
   help="Uncompromising AI code review CLI",
@@ -53,7 +57,13 @@ def main(
   ),
   model: str = typer.Option(None, "--model", "-m", help="Model to use"),
   full: bool = typer.Option(False, "--full", "-f", help="Full review (default: quick review)"),
-  focus: str = typer.Option(None, "--focus", help="Focus areas: security,bugs,style,performance"),
+  focus: str = typer.Option(
+    None,
+    "--focus",
+    help=_FOCUS_HELP,
+    show_default=False,
+    metavar="AREAS",
+  ),
   format_type: str = typer.Option(
     "terminal", "--format", help="Output format: terminal, json, markdown"
   ),
@@ -140,7 +150,10 @@ def _parse_focus(focus_str: str) -> list[FocusArea]:
     try:
       areas.append(FocusArea(part))
     except ValueError:
-      console.print(f"[yellow]Warning:[/yellow] Unknown focus area '{part}', ignoring")
+      console.print(
+        f"[yellow]Warning:[/yellow] Unknown focus area '{part}'. "
+        f"Valid areas: {', '.join(_VALID_FOCUS_AREAS)}"
+      )
   return areas or [FocusArea.ALL]
 
 
