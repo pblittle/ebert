@@ -53,7 +53,13 @@ def main(
   ),
   model: str = typer.Option(None, "--model", "-m", help="Model to use"),
   full: bool = typer.Option(False, "--full", "-f", help="Full review (default: quick review)"),
-  focus: str = typer.Option(None, "--focus", help="Focus areas: security,bugs,style,performance"),
+  focus: str = typer.Option(
+    None,
+    "--focus",
+    help="Focus areas (comma-separated): security, bugs, style, performance, all",
+    show_default=False,
+    metavar="AREAS",
+  ),
   format_type: str = typer.Option(
     "terminal", "--format", help="Output format: terminal, json, markdown"
   ),
@@ -134,13 +140,17 @@ def main(
 
 def _parse_focus(focus_str: str) -> list[FocusArea]:
   """Parse focus string into list of FocusArea."""
+  valid_areas = [a.value for a in FocusArea]
   areas = []
   for part in focus_str.split(","):
     part = part.strip().lower()
     try:
       areas.append(FocusArea(part))
     except ValueError:
-      console.print(f"[yellow]Warning:[/yellow] Unknown focus area '{part}', ignoring")
+      console.print(
+        f"[yellow]Warning:[/yellow] Unknown focus area '{part}'. "
+        f"Valid areas: {', '.join(valid_areas)}"
+      )
   return areas or [FocusArea.ALL]
 
 
