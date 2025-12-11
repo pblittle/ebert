@@ -1,5 +1,6 @@
 """Tests for diff extraction."""
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,7 @@ from ebert.diff.extractor import (
   FileError,
   _detect_language_extensions,
   _expand_directories,
+  _filter_ignored_paths,
   _filter_with_fallback,
   _format_as_diff,
   _no_files_error,
@@ -376,3 +378,54 @@ class TestResolvePatternFiltering:
     # Should only get src/app.ts, not __pycache__ files
     assert len(result) == 1
     assert result[0].name == "app.ts"
+
+
+class TestNestedNodeModulesFiltering:
+  """Test that nested node_modules directories are filtered correctly."""
+
+  def test_filters_nested_node_modules_in_git_repo(self, tmp_path: Path) -> None:
+    """Nested node_modules should be filtered even with root-level gitignore."""
+    # Initialize git repo
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+
+    # Create .gitignore with only root-level pattern (common in older projects)
+    (tmp_path / ".gitignore").write_text("node_modules/\n")
+
+    # Create nested structure: vendors/pkg/node_modules/
+    vendors = tmp_path / "vendors" / "pkg"
+    vendors.mkdir(parents=True)
+    nested_nm = vendors / "node_modules" / "dep"
+    nested_nm.mkdir(parents=True)
+    (nested_nm / "index.js").write_text("module.exports = {};")
+
+    # Create a valid source file
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.js").write_text("const x = 1;")
+
+    # Filter paths - nested node_modules should be excluded by fallback
+    paths = [
+      nested_nm / "index.js",
+      src / "app.js",
+    ]
+    result = _filter_ignored_paths(paths, tmp_path)
+
+    # Should only have app.js, not nested node_modules
+    assert len(result) == 1
+    assert result[0].name == "app.js"
+
+  def test_filters_deeply_nested_node_modules(self, tmp_path: Path) -> None:
+    """node_modules at any depth should be filtered."""
+    # Create deep nesting: a/b/c/node_modules/d/e/f.js
+    deep = tmp_path / "a" / "b" / "c" / "node_modules" / "d" / "e"
+    deep.mkdir(parents=True)
+    (deep / "f.js").write_text("x")
+
+    # Create valid file
+    (tmp_path / "main.js").write_text("y")
+
+    paths = [deep / "f.js", tmp_path / "main.js"]
+    result = _filter_with_fallback(paths)
+
+    assert len(result) == 1
+    assert result[0].name == "main.js"
