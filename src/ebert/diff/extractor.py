@@ -221,25 +221,32 @@ def _filter_with_git(paths: list[Path], base_path: Path) -> list[Path]:
     return []
 
   # Convert to relative paths for git check-ignore
+  # Skip paths that can't be made relative (shouldn't happen, but defensive)
   path_map: dict[str, Path] = {}
   for p in paths:
     try:
       rel = str(p.relative_to(base_path))
+      path_map[rel] = p
     except ValueError:
-      rel = str(p)
-    path_map[rel] = p
+      # Path not inside git root - this indicates an unexpected state
+      # Skip it rather than passing incorrect absolute path to git
+      continue
+
+  if not path_map:
+    return []
 
   # Batch check with git check-ignore using stdin
+  # Use -z for NUL-separated I/O to handle filenames with newlines
   try:
     result = subprocess.run(
-      ["git", "check-ignore", "--stdin"],
+      ["git", "check-ignore", "--stdin", "-z"],
       cwd=base_path,
-      input="\n".join(path_map.keys()),
+      input="\0".join(path_map.keys()),
       capture_output=True,
       text=True,
     )
-    # git check-ignore returns ignored paths on stdout (one per line)
-    ignored = set(result.stdout.strip().split("\n")) if result.stdout.strip() else set()
+    # git check-ignore -z returns NUL-separated ignored paths
+    ignored = {p for p in result.stdout.split("\0") if p}
     return [path_map[rel] for rel in path_map if rel not in ignored]
   except (subprocess.CalledProcessError, FileNotFoundError):
     # If git fails, fall back to hardcoded excludes
