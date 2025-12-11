@@ -1,5 +1,6 @@
 """Tests for diff extraction."""
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -384,8 +385,6 @@ class TestNestedNodeModulesFiltering:
 
   def test_filters_nested_node_modules_in_git_repo(self, tmp_path: Path) -> None:
     """Nested node_modules should be filtered even with root-level gitignore."""
-    import subprocess
-
     # Initialize git repo
     subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
 
