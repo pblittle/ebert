@@ -1,9 +1,23 @@
 """Tests for CLI engine integration."""
 
+from unittest.mock import patch
+
 from ebert.cli import app
+from ebert.models import ReviewComment, ReviewResult, Severity
 from typer.testing import CliRunner
 
 runner = CliRunner()
+
+
+def _make_result(severities: list[Severity]) -> ReviewResult:
+  """Create a ReviewResult with comments of the given severities."""
+  comments = [
+    ReviewComment(file="test.py", line=i + 1, severity=sev, message=f"Issue {i}")
+    for i, sev in enumerate(severities)
+  ]
+  return ReviewResult(
+    comments=comments, summary="Test", provider="deterministic", model="rules-v1"
+  )
 
 
 class TestEngineValidation:
@@ -48,3 +62,29 @@ class TestEngineValidation:
     # Should fail with provider error, not validation error
     assert "--provider is only valid" not in result.output
     assert "--engine llm requires" not in result.output
+
+
+class TestExitCode:
+  @patch("ebert.cli.run_review")
+  def test_exit_1_when_high_severity_with_flag(self, mock_review: patch) -> None:
+    mock_review.return_value = _make_result([Severity.HIGH])
+    result = runner.invoke(app, ["--exit-code"])
+    assert result.exit_code == 1
+
+  @patch("ebert.cli.run_review")
+  def test_exit_1_when_critical_severity_with_flag(self, mock_review: patch) -> None:
+    mock_review.return_value = _make_result([Severity.CRITICAL])
+    result = runner.invoke(app, ["--exit-code"])
+    assert result.exit_code == 1
+
+  @patch("ebert.cli.run_review")
+  def test_exit_0_when_no_severe_issues_with_flag(self, mock_review: patch) -> None:
+    mock_review.return_value = _make_result([Severity.MEDIUM, Severity.LOW])
+    result = runner.invoke(app, ["--exit-code"])
+    assert result.exit_code == 0
+
+  @patch("ebert.cli.run_review")
+  def test_exit_0_without_flag_ignores_severity(self, mock_review: patch) -> None:
+    mock_review.return_value = _make_result([Severity.CRITICAL])
+    result = runner.invoke(app, [])
+    assert result.exit_code == 0

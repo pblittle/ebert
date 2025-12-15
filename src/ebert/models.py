@@ -88,3 +88,8 @@ class ReviewResult:
   summary: str
   provider: str
   model: str
+
+  @property
+  def has_severe_issues(self) -> bool:
+    """Check if result contains HIGH or CRITICAL severity issues."""
+    return any(c.severity in (Severity.HIGH, Severity.CRITICAL) for c in self.comments)
