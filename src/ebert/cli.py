@@ -71,6 +71,9 @@ def main(
   no_ignore: bool = typer.Option(
     False, "--no-ignore", help="Disable .gitignore filtering (include all files)"
   ),
+  exit_code: bool = typer.Option(
+    False, "--exit-code", help="Exit with code 1 if HIGH or CRITICAL issues found"
+  ),
   debug: bool = typer.Option(False, "--debug", "-d", help="Show full traceback on errors"),
   version: bool = typer.Option(None, "--version", "-v", callback=version_callback, is_eager=True),
 ) -> None:
@@ -124,6 +127,9 @@ def main(
     output = formatter.format(result)
     if output:
       console.print(output)
+
+    if exit_code and result.has_severe_issues:
+      raise typer.Exit(1)
 
   except ProviderNotFoundError as e:
     console.print(f"[red]Error:[/red] {e}")
