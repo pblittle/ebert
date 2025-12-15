@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from rich.console import Console
+
 from ebert.config import Settings, load_config
 from ebert.diff import extract_branch_diff, extract_files_as_context, extract_staged_diff
 from ebert.models import (
@@ -14,6 +16,8 @@ from ebert.models import (
 )
 from ebert.providers import ProviderRegistry, get_provider
 from ebert.rules import RuleEngine
+
+_console = Console(stderr=True)
 
 
 class ReviewOrchestrator:
@@ -76,7 +80,8 @@ class ReviewOrchestrator:
       return engine.review(context)
     else:
       provider = get_provider(self.settings.provider, self.settings.model)
-      return provider.review(context)
+      with _console.status(f"Reviewing with {provider.name}..."):
+        return provider.review(context)
 
 
 def run_review(
