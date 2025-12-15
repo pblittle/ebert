@@ -2,6 +2,7 @@
 
 import json
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 from rich.console import Console
 from rich.panel import Panel
@@ -66,9 +67,10 @@ class TerminalFormatter(OutputFormatter):
       if comment.suggestion:
         message += f"\n[dim]Suggestion: {comment.suggestion}[/dim]"
 
+      file_link = self._make_file_link(comment.file, comment.line)
       table.add_row(
         severity_text,
-        comment.file,
+        file_link,
         str(comment.line) if comment.line else "-",
         message,
       )
@@ -76,6 +78,13 @@ class TerminalFormatter(OutputFormatter):
     self.console.print()
     self.console.print(table)
     self.console.print(f"\n[dim]{len(result.comments)} issue(s) found[/dim]")
+
+  def _make_file_link(self, file_path: str, line: int | None) -> str:
+    """Create a clickable file link for terminals that support hyperlinks."""
+    url = Path(file_path).resolve().as_uri()
+    if line:
+      url += f":{line}"
+    return f"[link={url}]{file_path}[/link]"
 
 
 class JsonFormatter(OutputFormatter):
