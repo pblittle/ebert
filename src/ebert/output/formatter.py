@@ -136,12 +136,35 @@ class MarkdownFormatter(OutputFormatter):
     return "\n".join(lines)
 
 
+class GitHubFormatter(OutputFormatter):
+  """GitHub Actions workflow command formatter for PR annotations."""
+
+  def format(self, result: ReviewResult) -> str:
+    lines = []
+    for comment in result.comments:
+      level = self._severity_to_level(comment.severity)
+      location = f"file={comment.file}"
+      if comment.line:
+        location += f",line={comment.line}"
+      message = comment.message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+      lines.append(f"::{level} {location}::{message}")
+    return "\n".join(lines)
+
+  def _severity_to_level(self, severity: Severity) -> str:
+    if severity in (Severity.CRITICAL, Severity.HIGH):
+      return "error"
+    if severity == Severity.MEDIUM:
+      return "warning"
+    return "notice"
+
+
 def get_formatter(format_type: str) -> OutputFormatter:
   """Get formatter by type name."""
   formatters = {
     "terminal": TerminalFormatter,
     "json": JsonFormatter,
     "markdown": MarkdownFormatter,
+    "github": GitHubFormatter,
   }
   formatter_class = formatters.get(format_type)
   if not formatter_class:

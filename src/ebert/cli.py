@@ -65,7 +65,7 @@ def main(
     metavar="AREAS",
   ),
   format_type: str = typer.Option(
-    "terminal", "--format", help="Output format: terminal, json, markdown"
+    "terminal", "--format", help="Output format: terminal, json, markdown, github"
   ),
   config: Path = typer.Option(None, "--config", "-c", help="Config file path"),
   no_ignore: bool = typer.Option(

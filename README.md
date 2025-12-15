@@ -43,6 +43,7 @@ ebert --full                 # Comprehensive review (not just critical issues)
 ebert --branch feature/foo   # Review branch against main
 ebert --focus security,bugs  # Focus on specific areas
 ebert --format markdown      # Output for PR comments
+ebert --format github        # GitHub Actions annotations
 ebert --exit-code            # Exit 1 if HIGH/CRITICAL issues (for CI)
 ebert --provider ollama      # Use local model
 ```
