@@ -3,8 +3,13 @@
 import json
 
 import pytest
-from ebert.models import ReviewResult
-from ebert.output.formatter import JsonFormatter, MarkdownFormatter, get_formatter
+from ebert.models import ReviewComment, ReviewResult, Severity
+from ebert.output.formatter import (
+  GitHubFormatter,
+  JsonFormatter,
+  MarkdownFormatter,
+  get_formatter,
+)
 
 
 class TestJsonFormatter:
@@ -59,6 +64,54 @@ class TestMarkdownFormatter:
     assert "Consider adding a docstring" in output
 
 
+class TestGitHubFormatter:
+  def test_format_empty_result(self) -> None:
+    result = ReviewResult(
+      comments=[], summary="No issues", provider="test", model="test-model"
+    )
+    formatter = GitHubFormatter()
+    output = formatter.format(result)
+    assert output == ""
+
+  def test_format_high_severity_as_error(self) -> None:
+    result = ReviewResult(
+      comments=[ReviewComment(file="test.py", line=10, severity=Severity.HIGH, message="Bug")],
+      summary="Issues", provider="test", model="test-model"
+    )
+    formatter = GitHubFormatter()
+    output = formatter.format(result)
+    assert output == "::error file=test.py,line=10::Bug"
+
+  def test_format_medium_severity_as_warning(self) -> None:
+    result = ReviewResult(
+      comments=[ReviewComment(file="test.py", line=5, severity=Severity.MEDIUM, message="Smell")],
+      summary="Issues", provider="test", model="test-model"
+    )
+    formatter = GitHubFormatter()
+    output = formatter.format(result)
+    assert output == "::warning file=test.py,line=5::Smell"
+
+  def test_format_low_severity_as_notice(self) -> None:
+    result = ReviewResult(
+      comments=[ReviewComment(file="test.py", line=1, severity=Severity.LOW, message="Info")],
+      summary="Issues", provider="test", model="test-model"
+    )
+    formatter = GitHubFormatter()
+    output = formatter.format(result)
+    assert output == "::notice file=test.py,line=1::Info"
+
+  def test_format_encodes_special_chars(self) -> None:
+    result = ReviewResult(
+      comments=[ReviewComment(
+        file="test.py", line=1, severity=Severity.HIGH, message="Error with %\nSee details."
+      )],
+      summary="Issues", provider="test", model="test-model"
+    )
+    formatter = GitHubFormatter()
+    output = formatter.format(result)
+    assert output == "::error file=test.py,line=1::Error with %25%0ASee details."
+
+
 class TestGetFormatter:
   def test_get_terminal_formatter(self) -> None:
     formatter = get_formatter("terminal")
@@ -71,6 +124,10 @@ class TestGetFormatter:
   def test_get_markdown_formatter(self) -> None:
     formatter = get_formatter("markdown")
     assert isinstance(formatter, MarkdownFormatter)
+
+  def test_get_github_formatter(self) -> None:
+    formatter = get_formatter("github")
+    assert isinstance(formatter, GitHubFormatter)
 
   def test_unknown_formatter(self) -> None:
     with pytest.raises(ValueError, match="Unknown format"):
