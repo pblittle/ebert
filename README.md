@@ -46,6 +46,8 @@ ebert --format markdown      # Output for PR comments
 ebert --format github        # GitHub Actions annotations
 ebert --exit-code            # Exit 1 if HIGH/CRITICAL issues (for CI)
 ebert --provider ollama      # Use local model
+ebert --engine deterministic # Use pattern-based rules (no API key)
+ebert --no-ignore            # Include files ignored by .gitignore
 ```
 
 ## Providers
